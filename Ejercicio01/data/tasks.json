@@ -1,0 +1,11 @@
+[
+  {
+    "id": 1,
+    "titulo": "TP 1 - Programacion",
+    "materia": "Programacion",
+    "descripcion": "Hacer una app en Qt",
+    "estado": "Pendiente",
+    "prioridad": "Alta",
+    "fechaEntrega": "2026-04-10"
+  }
+]
