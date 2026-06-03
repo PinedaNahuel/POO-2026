@@ -1,0 +1,10 @@
+build/
+*.pro.user*
+*.exe
+*.dll
+*.obj
+*.o
+*.user
+gestor_dibujos.db
+/.vs/
+*.log
