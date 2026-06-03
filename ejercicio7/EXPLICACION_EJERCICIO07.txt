@@ -1,0 +1,216 @@
+EJERCICIO 07 - EXPLICACION DE FUNCIONAMIENTO DEL CODIGO
+
+Proyecto: Login con clima, fondo dinamico y ventana principal fullscreen (Qt/C++)
+Fecha: 2026-04-23
+
+====================================================
+1) OBJETIVO GENERAL
+====================================================
+La app muestra una pantalla de Login (admin / 1234), consulta clima actual en Cordoba mediante API HTTP,
+descarga una imagen de fondo con cache local, y al autenticarse abre la ventana principal en fullscreen.
+Incluye soporte proxy, modo offline con datos simulados, logs de eventos y lectura de configuracion desde archivo.
+
+====================================================
+2) ESTRUCTURA DE ARCHIVOS (RESPONSABILIDADES)
+====================================================
+- main.cpp
+  Punto de entrada. Crea QApplication, instancia Login y ejecuta el loop.
+
+- pantalla.h / pantalla.cpp
+  Clase base abstracta Pantalla (interfaz comun para pantallas visuales).
+  Metodo abstracto: configurarPantalla().
+
+- login.h / login.cpp / login.ui
+  Pantalla de login (deriva de Pantalla).
+  Funciones clave:
+  - Validacion de usuario/password.
+  - Bloqueo temporal tras 3 intentos fallidos (30 segundos).
+  - Enter en campos de texto para login.
+  - Arranque de consulta de clima.
+  - Descarga/carga de fondo con cache local.
+  - Apertura de Ventana principal solo cuando el fondo ya esta listo.
+
+- ventana.h / ventana.cpp
+  Ventana principal (deriva de Pantalla).
+  - Se abre en fullscreen.
+  - Dibuja fondo escalado sin deformar (KeepAspectRatioByExpanding).
+  - Muestra tarjeta tipo CV/LinkedIn.
+  - Carga foto local si profile_photo_path esta configurado, sino descarga por URL publica.
+  - Tecla ESC para cerrar la ventana.
+
+- datosbase.h
+  Clase base abstracta para datos (no UI), con metodo abstracto actualizar().
+
+- climaservicio.h / climaservicio.cpp
+  Clase derivada de DatosBase para consumo de clima.
+  - Usa QNetworkAccessManager (obligatorio en consigna).
+  - Consulta API directa por URL + query params (sin SDK).
+  - Envia ciudad, unidades, api key.
+  - Valida JSON recibido.
+  - Emite senales de resultado o error amigable.
+  - Soporta modo offline con datos simulados si falla red/API.
+  - Soporta proxy.
+
+- appconfig.h / appconfig.cpp
+  Lectura/escritura de config.ini.
+  - Busca config.ini priorizando la raiz del proyecto (donde esta el .pro).
+  - Crea config por defecto si no existe.
+  - Carga api key, ciudad, unidades, urls y proxy.
+  - Incluye profile_photo_path para foto local.
+
+- logger.h / logger.cpp
+  Logger simple a archivo de texto con timestamp y descripcion.
+
+- config.ini
+  Parametros de ejecucion (api, ui, proxy).
+
+- ejercicio 7 login con clima y fondo de pantalla.pro
+  Configuracion de proyecto Qt (modulos widgets + network, sources/headers/forms).
+
+====================================================
+3) FLUJO DE EJECUCION (PASO A PASO)
+====================================================
+1. main.cpp crea Login y la muestra.
+2. Login::configurarPantalla():
+   - Inicializa logger.
+   - Carga config.ini.
+   - Configura proxy (si enabled=true).
+   - Conecta signals/slots de botones, Enter, timers y clima.
+   - Lanza consulta de clima.
+   - Inicia carga/descarga de fondo.
+3. ClimaServicio::actualizar():
+   - Si falta key -> emite error amigable + datos simulados.
+   - Si hay key -> arma request HTTP y espera reply.
+4. ClimaServicio::onReplyFinished():
+   - Si error de red/HTTP -> mensaje especifico + fallback offline simulado.
+   - Si JSON valido -> actualiza temperatura y hora local.
+5. Usuario intenta login:
+   - Correcto: admin / 1234.
+   - Incorrecto: incrementa contador; al 3er fallo bloquea 30 seg.
+6. Si login valido:
+   - Solo abre Ventana cuando m_backgroundReady == true.
+   - Ventana se abre en fullscreen.
+7. Ventana principal:
+   - Muestra fondo ajustado.
+   - Muestra CV y foto (local o URL).
+   - ESC cierra la ventana.
+
+====================================================
+4) SIGNALS/SLOTS IMPORTANTES (RESUMEN)
+====================================================
+- Login:
+  - btnIngresar.clicked -> on_btnIngresar_clicked
+  - editUsuario.returnPressed -> on_btnIngresar_clicked
+  - editPassword.returnPressed -> on_btnIngresar_clicked
+  - lockTimer.timeout -> onLockTimerTick
+  - clockTimer.timeout -> onClockTick
+  - ClimaServicio.climaActualizado -> onClimaActualizado
+  - ClimaServicio.errorAmigable -> onErrorAmigable
+  - QNetworkReply.finished (fondo) -> onBackgroundDownloaded
+
+- Ventana:
+  - QNetworkReply.finished (foto URL) -> onPhotoDownloaded
+
+====================================================
+5) CONFIGURACION (config.ini)
+====================================================
+Secciones usadas:
+
+[api]
+weather_url=https://api.openweathermap.org/data/2.5/weather
+key=TU_API_KEY
+city=Cordoba,AR
+units=metric
+
+[ui]
+background_url=https://picsum.photos/1920/1080
+profile_photo_path=mi_foto.jpg      ; opcional, recomendado para foto real
+profile_photo_url=https://...        ; fallback si no hay foto local
+
+[proxy]
+enabled=false
+host=
+port=8080
+user=
+password=
+
+Notas:
+- Si la red no requiere proxy: enabled=false.
+- Si usa proxy corporativo/facultad: enabled=true y completar host/port/user/password.
+
+====================================================
+6) LOGS Y DIAGNOSTICO
+====================================================
+Se registran acciones y errores en eventos.log.
+Ubicacion habitual al ejecutar desde Qt Creator:
+- build/.../debug/logs/eventos.log
+
+Eventos que conviene revisar:
+- Ruta de config cargada.
+- Solicitud de clima enviada.
+- Codigo HTTP y detalle de error.
+- Resultado de descarga de fondo.
+- Login valido/fallido/bloqueado.
+
+====================================================
+7) ESTADO ACTUAL VS CONSIGNA
+====================================================
+IMPLEMENTADO:
+- Login en QtDesigner con usuario admin:1234.
+- Bloqueo temporal tras 3 intentos fallidos.
+- API de terceros consumida con QNetworkAccessManager.
+- Consulta directa a API (sin SDK).
+- Temperatura y hora local en Login.
+- Descarga de fondo por URL publica + cache local.
+- Soporte proxy por config.
+- Ventana principal abre tras login valido y fondo listo.
+- Ventana principal fullscreen.
+- Imagen principal ajustada sin deformacion.
+- Clase abstracta Pantalla + derivadas Login y Ventana.
+- Clase de datos (DatosBase abstracta + ClimaServicio derivada).
+- Registro de eventos en log.
+- Lectura de configuracion desde archivo.
+- Validacion de respuesta y mensajes amigables.
+- Modo offline simulado si no hay internet/error API.
+- Uso de signals/slots.
+- CV estilo LinkedIn en ventana principal con foto.
+
+====================================================
+8) QUE FALTA O QUE CONVIENE INCORPORAR ANTES DE ENTREGAR
+====================================================
+No hay faltantes funcionales criticos de consigna; el ejercicio esta practicamente completo.
+Recomendaciones para cerrar entrega con calidad:
+
+1) Foto final personal
+- Guardar foto en la raiz del proyecto (ejemplo: mi_foto.jpg).
+- Configurar profile_photo_path=mi_foto.jpg.
+
+2) Pruebas de evidencia para defensa
+- Caso online (clima real).
+- Caso key invalida (mensaje 401 amigable).
+- Caso ciudad invalida (mensaje 404 amigable).
+- Caso 3 intentos fallidos (bloqueo 30 seg).
+- Caso Enter para login.
+- Caso ESC para salir de fullscreen.
+
+3) Ajuste UX opcional (recomendado)
+- Al cerrar Ventana con ESC, decidir comportamiento final:
+  a) cerrar toda la app, o
+  b) volver a mostrar Login.
+  (Actualmente se cierra la ventana principal; segun configuracion de Qt puede quedar Login oculto.)
+
+4) Si se exige "sin datos falsos" en demo
+- Cambiar politica de fallback para no mostrar simulados y mostrar "sin datos".
+  (Hoy se mantiene offline simulado porque la consigna lo pide explicitamente.)
+
+====================================================
+9) RESUMEN PARA OTRO CHAT/COPILOT
+====================================================
+Si otro asistente toma este proyecto, pedirle:
+- Mantener arquitectura actual (Pantalla + DatosBase + servicios).
+- No romper flujo: login valido solo abre principal cuando fondo esta listo.
+- Respetar soporte proxy y modo offline.
+- Usar config.ini en raiz del proyecto.
+- Mantener logs y mensajes de error amigables.
+
+Fin del documento.

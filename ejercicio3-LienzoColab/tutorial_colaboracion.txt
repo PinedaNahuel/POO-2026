@@ -1,0 +1,121 @@
+TUTORIAL: PROBAR LA COLABORACION EN TIEMPO REAL
+===============================================
+
+Este tutorial te guia para probar que la aplicacion funciona como
+paint online colaborativo entre multiples usuarios.
+
+REQUISITOS:
+- Servidor VPS configurado y corriendo
+- Al menos 2 instancias del cliente Qt corriendo
+- Conexion a internet en todas las maquinas
+
+PASO 1: PREPARAR EL ENTORNO DE PRUEBA
+--------------------------------------
+1. Asegura que el servidor esta corriendo en el VPS
+2. Compila y ejecuta la aplicacion Qt en tu maquina local
+3. Comparte el ejecutable con tus companeros (o que compilen ellos mismos)
+
+PASO 2: PRUEBA BASICA DE SINCRONIZACION
+----------------------------------------
+1. Usuario 1: Abre la aplicacion, dibuja algo, presiona "Guardar"
+2. Usuario 2: Abre la aplicacion (deberia cargar el dibujo automaticamente)
+3. Usuario 1: Dibuja mas, guarda
+4. Usuario 2: Deberia ver los cambios automaticamente (cada 2 segundos)
+
+PASO 3: PRUEBA DE COLABORACION SIMULTANEA
+------------------------------------------
+1. Usuario 1 y Usuario 2 tienen la aplicacion abierta
+2. Usuario 1 dibuja con click izquierdo (lápiz)
+3. Usuario 2 deberia ver los cambios en tiempo real
+4. Usuario 2 dibuja con click derecho (goma)
+5. Usuario 1 deberia ver los cambios
+
+NOTA: La sincronizacion es cada 2 segundos, no instantanea.
+
+PASO 4: PRUEBA DE FUNCIONALIDADES
+----------------------------------
+Prueba estas caracteristicas colaborativas:
+
+1. Colores: Usuario 1 presiona 1-9 para cambiar color, dibuja
+   Usuario 2 deberia ver el dibujo en el color correcto
+
+2. Grosor: Usuario 1 cambia grosor con scroll del mouse, dibuja
+   Usuario 2 deberia ver el grosor correcto
+
+3. Goma: Usuario 1 borra con click derecho
+   Usuario 2 deberia ver las areas borradas
+
+4. Guardado: Usuario 1 presiona "Guardar"
+   Usuario 2 deberia mantener su dibujo local sin perderlo
+
+PASO 5: ESCENARIOS DE PRUEBA AVANZADOS
+---------------------------------------
+1. Desconexion temporal:
+   - Desconecta internet en Usuario 1
+   - Usuario 1 dibuja offline
+   - Reconecta internet
+   - Usuario 1 presiona "Guardar"
+   - Usuario 2 deberia ver todos los cambios
+
+2. Conflicto de edicion:
+   - Usuario 1 y 2 dibujan en la misma area al mismo tiempo
+   - Al guardar, deberia fusionarse sin perder informacion
+   - (Nota: usa IDs unicos para evitar sobrescritura)
+
+3. Reinicio del servidor:
+   - Deten el servidor VPS
+   - Los clientes deberian mostrar errores de sincronizacion
+   - Reinicia el servidor
+   - Los clientes deberian recuperar la sincronizacion
+
+PASO 6: DEPURACION DE PROBLEMAS COMUNES
+----------------------------------------
+1. "No se sincroniza automaticamente":
+   - Verifica que startAutoSync(2000) no este comentado
+   - Revisa logs en barra de estado
+
+2. "Pierdo mi dibujo local":
+   - Esto NO deberia pasar - el merge preserva trazos locales
+   - Si pasa, hay bug en mergeFrom()
+
+3. "Colores no se ven igual":
+   - Verifica que ambos clientes usen la misma version del codigo
+   - Los colores 1-9 deberian ser identicos
+
+4. "Servidor no responde":
+   - Verifica que el VPS este encendido
+   - Revisa que el puerto 5000 este abierto
+   - ssh al VPS y verifica que python3 server.py esta corriendo
+
+PASO 7: MONITOREO DEL SERVIDOR
+-------------------------------
+Para ver que esta pasando en el servidor:
+
+ssh usuario@tu_vps_ip
+cd paint_server
+
+Ver el archivo de datos:
+cat canvas_data.json
+
+Ver logs si usas screen:
+screen -r paint_server
+
+O agrega logging al server.py:
+import logging
+logging.basicConfig(level=logging.INFO)
+
+PASO 8: ESCALABILIDAD Y PRODUCCION
+-----------------------------------
+Para mas usuarios:
+- Usa Gunicorn: pip3 install gunicorn
+- Ejecuta: gunicorn -w 4 server:app -b 0.0.0.0:5000
+- Considera base de datos (SQLite, PostgreSQL) en lugar de archivo JSON
+- Implementa rate limiting para evitar abuso
+- Usa HTTPS con Let's Encrypt
+
+NOTAS IMPORTANTES:
+- La colaboracion funciona via polling cada 2 segundos
+- No hay WebSockets - es HTTP simple
+- Los datos se almacenan en memoria del servidor (reinicio pierde datos)
+- Para persistencia real, guarda en base de datos
+- Maxima concurrencia depende del VPS (CPU, RAM)

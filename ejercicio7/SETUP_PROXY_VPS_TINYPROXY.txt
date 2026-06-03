@@ -1,0 +1,194 @@
+SETUP PROXY EN VPS (CONTABO) - GUIA ORDENADA
+Fecha: 2026-04-23
+Objetivo: levantar un FORWARD PROXY limpio y seguro para usar desde tu app Qt.
+Recomendacion: Tinyproxy (simple, estable y suficiente para la consigna).
+
+====================================================
+0) SUPUESTOS
+====================================================
+- VPS con Ubuntu/Debian.
+- Acceso SSH con usuario con sudo.
+- Tu IP publica cliente (desde donde corre tu app) ya identificada.
+- Ejemplo de datos (cambia por los tuyos):
+  - IP_VPS=203.0.113.10
+  - IP_CLIENTE=198.51.100.25
+  - PUERTO_PROXY=8888
+  - USUARIO_PROXY=alumno
+  - CLAVE_PROXY=ClaveSegura123
+
+Tip para obtener tu IP cliente:
+- En tu PC local: curl https://api.ipify.org
+
+====================================================
+1) PREPARAR ESTRUCTURA ORDENADA EN VPS
+====================================================
+Conectate al VPS por SSH y ejecuta:
+
+sudo mkdir -p /opt/proxy/docs
+sudo mkdir -p /opt/proxy/backups
+sudo mkdir -p /opt/proxy/scripts
+sudo chown -R root:root /opt/proxy
+sudo chmod -R 755 /opt/proxy
+
+Esto deja toda la documentacion, backups y scripts en un solo lugar prolijo.
+
+====================================================
+2) INSTALAR PAQUETES NECESARIOS
+====================================================
+sudo apt update
+sudo apt install -y tinyproxy ufw curl
+
+====================================================
+3) BACKUP DE CONFIG ACTUAL
+====================================================
+sudo cp /etc/tinyproxy/tinyproxy.conf /opt/proxy/backups/tinyproxy.conf.original.$(date +%F-%H%M%S)
+
+====================================================
+4) CONFIGURAR TINYPROXY (FORWARD PROXY)
+====================================================
+ATENCION: cambia IP_CLIENTE, USUARIO_PROXY y CLAVE_PROXY por valores reales.
+
+sudo tee /etc/tinyproxy/tinyproxy.conf > /dev/null <<'EOF'
+User tinyproxy
+Group tinyproxy
+Port 8888
+Timeout 600
+DefaultErrorFile "/usr/share/tinyproxy/default.html"
+StatFile "/usr/share/tinyproxy/stats.html"
+LogFile "/var/log/tinyproxy/tinyproxy.log"
+LogLevel Info
+PidFile "/run/tinyproxy/tinyproxy.pid"
+MaxClients 100
+MinSpareServers 5
+MaxSpareServers 20
+StartServers 10
+MaxRequestsPerChild 0
+
+# Permitir solo localhost y tu IP cliente
+Allow 127.0.0.1
+Allow ::1
+Allow 198.51.100.25/32
+
+# Autenticacion basica
+BasicAuth alumno ClaveSegura123
+
+# Encabezado de privacidad
+DisableViaHeader Yes
+
+# Puertos CONNECT permitidos
+ConnectPort 80
+ConnectPort 443
+EOF
+
+Guardar copia de trabajo en carpeta ordenada:
+
+sudo cp /etc/tinyproxy/tinyproxy.conf /opt/proxy/docs/tinyproxy.conf.activo
+
+====================================================
+5) LEVANTAR SERVICIO Y AUTOINICIO
+====================================================
+sudo systemctl daemon-reload
+sudo systemctl enable tinyproxy
+sudo systemctl restart tinyproxy
+sudo systemctl status tinyproxy --no-pager
+
+Verificar que escucha en 8888:
+
+sudo ss -ltnp | grep 8888
+
+====================================================
+6) FIREWALL (MUY IMPORTANTE)
+====================================================
+Abrir solo SSH y el puerto proxy solo para tu IP cliente.
+
+sudo ufw allow OpenSSH
+sudo ufw allow from 198.51.100.25 to any port 8888 proto tcp
+sudo ufw --force enable
+sudo ufw status verbose
+
+Si en Contabo usas Cloud Firewall, replicar la misma regla alli:
+- permitir TCP 22 desde tu IP admin
+- permitir TCP 8888 solo desde IP_CLIENTE
+- denegar el resto
+
+====================================================
+7) PRUEBA FUNCIONAL DEL PROXY
+====================================================
+Prueba local en el VPS:
+
+curl -x http://alumno:ClaveSegura123@127.0.0.1:8888 https://api.ipify.org
+
+Debe responder la IP de salida del VPS.
+
+Prueba desde tu PC local:
+
+curl -x http://alumno:ClaveSegura123@203.0.113.10:8888 https://api.ipify.org
+
+Si responde, el proxy esta funcionando remoto.
+
+Prueba contra OpenWeather:
+
+curl -x http://alumno:ClaveSegura123@203.0.113.10:8888 "https://api.openweathermap.org/data/2.5/weather?q=Cordoba,AR&units=metric&appid=TU_API_KEY"
+
+====================================================
+8) CONFIGURAR TU APP QT (config.ini)
+====================================================
+En tu proyecto, dejar asi la seccion [proxy]:
+
+[proxy]
+enabled=true
+host=203.0.113.10
+port=8888
+user=alumno
+password=ClaveSegura123
+
+Notas:
+- No cambias endpoints de clima o fondo. Solo cambia el camino de red.
+- Si quieres volver a salida directa: enabled=false.
+
+====================================================
+9) VERIFICACION EN LOGS
+====================================================
+En la app Qt, revisar eventos.log y confirmar mensajes:
+- Proxy habilitado para fondo...
+- Proxy de clima habilitado...
+- Solicitud de clima enviada...
+
+En VPS, revisar log de tinyproxy:
+
+sudo tail -n 100 /var/log/tinyproxy/tinyproxy.log
+
+====================================================
+10) MANTENIMIENTO ORDENADO
+====================================================
+Copiar estado actual cuando hagas cambios:
+
+sudo cp /etc/tinyproxy/tinyproxy.conf /opt/proxy/backups/tinyproxy.conf.$(date +%F-%H%M%S)
+
+Reiniciar despues de cada cambio:
+
+sudo systemctl restart tinyproxy
+
+====================================================
+11) ENDURECIMIENTO OPCIONAL (RECOMENDADO)
+====================================================
+- Cambiar credenciales regularmente.
+- Permitir solo IPs necesarias en Allow y UFW.
+- Evitar puertos no estandar abiertos.
+- Si necesitas cifrar trafico cliente->proxy, montar VPN (WireGuard) entre PC y VPS.
+
+====================================================
+12) ROLLBACK RAPIDO
+====================================================
+Volver config original:
+
+sudo cp /opt/proxy/backups/tinyproxy.conf.original.FECHA-HORA /etc/tinyproxy/tinyproxy.conf
+sudo systemctl restart tinyproxy
+
+Apagar proxy temporalmente:
+
+sudo systemctl stop tinyproxy
+
+====================================================
+FIN
+====================================================

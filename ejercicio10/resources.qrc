@@ -1,0 +1,7 @@
+<!DOCTYPE RCC><RCC version="1.0">
+<qresource>
+    <file>images/trex_pixel.svg</file>
+    <file>images/pajaro_pixel.svg</file>
+    <file>images/cactus_pixel.svg</file>
+</qresource>
+</RCC>

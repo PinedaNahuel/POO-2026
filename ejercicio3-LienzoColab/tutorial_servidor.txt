@@ -1,0 +1,173 @@
+TUTORIAL: CONFIGURACION DEL SERVIDOR VPS PARA PAINT COLABORATIVO
+=================================================================
+
+Este tutorial te guia paso a paso para configurar un servidor backend en tu VPS
+que permita sincronizar el lienzo de dibujo entre multiples clientes Qt.
+
+REQUISITOS PREVIOS:
+- VPS con Ubuntu/Debian (o similar Linux)
+- Acceso SSH como root o usuario con sudo
+- Python 3.8+ instalado
+- Conexion a internet
+
+PASO 1: INSTALAR DEPENDENCIAS EN EL VPS
+----------------------------------------
+Conectate via SSH a tu VPS:
+
+ssh usuario@tu_vps_ip
+
+Actualiza el sistema:
+sudo apt update && sudo apt upgrade -y
+
+Instala Python y herramientas necesarias:
+sudo apt install python3 python3-pip python3-venv -y
+
+IMPORTANTE: En Python 3.11+ de Debian, NO puedes instalar packages con pip3 directamente.
+Debes usar un virtual environment. Sigue estos pasos:
+
+1. Crea un virtual environment para el proyecto:
+python3 -m venv paint_env
+
+2. Activa el environment:
+source paint_env/bin/activate
+
+3. Ahora instala Flask (dentro del venv):
+pip install flask
+
+Nota: Cuando hagas esto, el prompt cambiara a mostrar (paint_env)
+
+PASO 2: CREAR EL SERVIDOR BACKEND
+----------------------------------
+Crea un directorio para el proyecto:
+mkdir paint_server
+cd paint_server
+
+Crea el archivo del servidor (server.py):
+
+from flask import Flask, request, jsonify
+import json
+import os
+
+app = Flask(__name__)
+
+# Archivo donde se guarda el estado del dibujo
+DATA_FILE = 'canvas_data.json'
+
+# Endpoint para cargar el dibujo actual
+@app.route('/load', methods=['GET'])
+def load_canvas():
+    if os.path.exists(DATA_FILE):
+        with open(DATA_FILE, 'r') as f:
+            data = json.load(f)
+        return jsonify(data)
+    else:
+        return jsonify({"strokes": []})
+
+# Endpoint para guardar el dibujo
+@app.route('/save', methods=['POST'])
+def save_canvas():
+    data = request.get_json()
+    with open(DATA_FILE, 'w') as f:
+        json.dump(data, f)
+    return jsonify({"status": "saved"})
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=False)
+
+PASO 3: CONFIGURAR FIREWALL
+---------------------------
+Abre el puerto 5000 en el firewall:
+
+sudo ufw allow 5000/tcp
+sudo ufw enable
+
+PASO 4: EJECUTAR EL SERVIDOR
+-----------------------------
+IMPORTANTE: Debes activar el venv antes de ejecutar el servidor.
+
+Desde el directorio paint_server:
+cd paint_server
+
+Activa el virtual environment:
+source paint_env/bin/activate
+
+Ejecuta el servidor en background:
+python3 server.py &
+
+Verifica que esta corriendo:
+ps aux | grep python
+
+Deberias ver el proceso corriendo con la ruta del venv.
+
+Tip: Si quieres desactivar el venv despues:
+deactivate
+
+PASO 5: HACERLO PERSISTENTE (OPCIONAL)
+---------------------------------------
+Para que el servidor se ejecute automaticamente al reiniciar el VPS:
+
+Instala screen:
+sudo apt install screen -y
+
+Crea un script para iniciar el servidor:
+nano start_paint_server.sh
+
+Pega esto:
+#!/bin/bash
+cd paint_server
+source paint_env/bin/activate
+python3 server.py
+
+Guarda con Ctrl+O, Enter, Ctrl+X
+
+Dale permisos:
+chmod +x start_paint_server.sh
+
+Ejecuta en screen:
+screen -S paint_server
+./start_paint_server.sh
+
+Desconectate con Ctrl+A+D
+
+Para reconectar:
+screen -r paint_server
+
+PASO 6: PROBAR EL SERVIDOR
+---------------------------
+Desde otra terminal o tu maquina local:
+
+curl http://tu_vps_ip:5000/load
+
+Deberia devolver: {"strokes":[]}
+
+PASO 7: CONFIGURAR DOMINIO/IP (OPCIONAL)
+-----------------------------------------
+Si tienes dominio, configura Nginx como proxy reverso:
+
+sudo apt install nginx -y
+
+Crea archivo de configuracion /etc/nginx/sites-available/paint:
+
+server {
+    listen 80;
+    server_name tu_dominio_o_ip;
+
+    location / {
+        proxy_pass http://127.0.0.1:5000;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+}
+
+Habilita el sitio:
+sudo ln -s /etc/nginx/sites-available/paint /etc/nginx/sites-enabled/
+sudo nginx -t
+sudo systemctl restart nginx
+
+Ahora puedes acceder via http://tu_dominio_o_ip sin :5000
+
+NOTAS IMPORTANTES:
+- Cambia 'tu_vps_ip' por la IP real de tu VPS
+- El servidor guarda el estado en 'canvas_data.json'
+- Si usas dominio, actualiza la URL en el cliente Qt
+- Para produccion, considera usar Gunicorn o similar para manejar mas conexiones

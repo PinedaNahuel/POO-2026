@@ -1,0 +1,142 @@
+TUTORIAL: TROUBLESHOOTING Y PROBLEMAS COMUNES
+==============================================
+
+Guia para diagnosticar y resolver problemas comunes en la configuracion
+del paint colaborativo.
+
+PROBLEMA 1: "No puedo conectarme al servidor"
+---------------------------------------------
+Sintomas: Error "Network error" o "Connection refused"
+
+Soluciones:
+1. Verifica la URL en mainwindow.cpp:
+   - Debe ser "http://tu_vps_ip:5000" (sin / al final)
+   - Prueba con curl desde tu maquina: curl http://tu_vps_ip:5000/load
+
+2. Verifica firewall del VPS:
+   ssh usuario@tu_vps_ip
+   sudo ufw status
+   Debe mostrar: 5000/tcp ALLOWED
+
+3. Verifica que el servidor esta corriendo:
+   ssh usuario@tu_vps_ip
+   ps aux | grep python
+   Debe mostrar el proceso server.py
+
+4. Prueba desde el VPS mismo:
+   curl http://localhost:5000/load
+
+PROBLEMA 2: "Los cambios no se sincronizan automaticamente"
+----------------------------------------------------------
+Sintomas: Solo se sincroniza al presionar "Guardar"
+
+Soluciones:
+1. Verifica que startAutoSync esta habilitado en mainwindow.cpp:
+   m_sync->startAutoSync(2000);  // NO comentado
+
+2. Cambia el intervalo a 1000ms para probar mas rapido
+
+3. Verifica que el timer no se detiene por errores
+
+PROBLEMA 3: "Pierdo mi dibujo local al sincronizar"
+---------------------------------------------------
+Sintomas: Al cargar del servidor, desaparece lo que estaba dibujando
+
+Soluciones:
+1. Esto NO deberia pasar - el merge preserva trazos locales
+2. Verifica que los IDs de stroke sean unicos (QUuid)
+3. Revisa la logica de mergeFrom() en CanvasModel
+4. Prueba guardando primero, luego dibujando mas
+
+PROBLEMA 4: "El servidor no guarda los datos"
+---------------------------------------------
+Sintomas: Al guardar, no persiste entre reinicios
+
+Soluciones:
+1. Verifica permisos de escritura:
+   ssh usuario@tu_vps_ip
+   cd paint_server
+   touch canvas_data.json
+   ls -la canvas_data.json
+
+2. Verifica que el directorio existe y es escribible
+
+3. Revisa logs del servidor al guardar
+
+PROBLEMA 5: "Colores se ven diferentes entre clientes"
+-----------------------------------------------------
+Sintomas: Un cliente ve rojo, otro ve azul
+
+Soluciones:
+1. Verifica que ambos usen la misma version del codigo
+2. Los colores 1-9 son hardcoded - deberian ser identicos
+3. Revisa que colorForKey() devuelva los mismos valores
+
+PROBLEMA 6: "La aplicacion se congela al guardar/cargar"
+-------------------------------------------------------
+Sintomas: UI no responde durante operaciones de red
+
+Soluciones:
+1. Las operaciones son asincronicas - no deberian congelar
+2. Verifica que uses QNetworkAccessManager correctamente
+3. Revisa que no haya bucles infinitos en el codigo
+
+PROBLEMA 7: "Error de compilacion en Qt Creator"
+-----------------------------------------------
+Sintomas: Errores al compilar
+
+Soluciones:
+1. Limpia y rebuild: Build > Clean All, luego Build > Build All
+2. Verifica que tengas Qt Network module: QT += network en .pro
+3. Revisa includes: #include <QNetworkAccessManager>
+4. Verifica version de Qt (5.15+ recomendada)
+
+PROBLEMA 8: "El servidor se cae despues de un tiempo"
+----------------------------------------------------
+Sintomas: Funciona al inicio pero luego deja de responder
+
+Soluciones:
+1. Ejecuta en background con nohup:
+   nohup python3 server.py &
+
+2. O usa screen como en el tutorial
+
+3. Revisa logs de errores del servidor
+
+4. Considera usar un proceso manager como systemd
+
+PROBLEMA 9: "Demasiados usuarios causan lentitud"
+-------------------------------------------------
+Sintomas: Con muchos usuarios, se vuelve lento
+
+Soluciones:
+1. Aumenta intervalo de polling (5000ms en lugar de 2000)
+2. Optimiza el servidor: usa Gunicorn con workers
+3. Implementa cache o base de datos
+4. Limita numero de conexiones concurrentes
+
+PROBLEMA 10: "Datos corruptos en el servidor"
+---------------------------------------------
+Sintomas: El JSON se daña y la app no puede cargar
+
+Soluciones:
+1. Backup del archivo canvas_data.json
+2. Reinicia con archivo vacio: echo '{"strokes":[]}' > canvas_data.json
+3. Agrega validacion JSON en el servidor
+4. Implementa backup automatico
+
+HERRAMIENTAS DE DIAGNOSTICO:
+---------------------------
+1. Cliente: Revisa barra de estado por mensajes de error
+2. Servidor: Agrega logging a server.py
+3. Red: Usa curl o Postman para probar endpoints
+4. Logs: Revisa /var/log/syslog en el VPS
+5. Monitor: Usa htop para ver uso de recursos
+
+CONTACTO:
+---------
+Si persisten los problemas, comparte:
+- Output de curl al servidor
+- Logs de Qt Creator
+- Configuracion del VPS
+- Version de Qt

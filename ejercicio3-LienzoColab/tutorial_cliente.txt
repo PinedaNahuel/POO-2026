@@ -1,0 +1,103 @@
+TUTORIAL: CONFIGURACION DEL CLIENTE QT PARA CONEXION AL VPS
+===========================================================
+
+Este tutorial explica como configurar tu aplicacion Qt para conectarse
+al servidor VPS y habilitar la colaboracion en tiempo real.
+
+PASO 1: VERIFICAR QUE EL SERVIDOR ESTA CORRIENDO
+-------------------------------------------------
+Antes de configurar el cliente, asegurate que el servidor VPS esta funcionando:
+
+Desde una terminal:
+curl http://tu_vps_ip:5000/load
+
+Deberia devolver: {"strokes":[]}
+
+Si usaste dominio en el tutorial del servidor:
+curl http://tu_dominio/load
+
+PASO 2: MODIFICAR LA URL DEL SERVIDOR EN EL CODIGO
+---------------------------------------------------
+Abre el archivo mainwindow.cpp en Qt Creator.
+
+Busca esta linea (alrededor de la linea 25):
+    m_sync->setServerUrl(QUrl("http://your-vps-url.com/api"));
+
+Cambiala por tu URL real:
+    m_sync->setServerUrl(QUrl("http://tu_vps_ip:5000"));
+
+O si usaste dominio:
+    m_sync->setServerUrl(QUrl("http://tu_dominio"));
+
+IMPORTANTE: No incluyas /load o /save en la URL base, el SyncManager los agrega automaticamente.
+
+PASO 3: COMPILAR Y EJECUTAR LA APLICACION
+------------------------------------------
+En Qt Creator:
+1. Abre el proyecto ejercicio 3 lienzo colaborativo en tiempo real.pro
+2. Build > Build Project
+3. Build > Run
+
+La aplicacion deberia:
+- Cargar el dibujo actual del servidor al iniciar
+- Sincronizar automaticamente cada 2 segundos
+- Guardar cuando presiones el boton "Guardar"
+
+PASO 4: PROBAR LA CONEXION
+---------------------------
+1. Abre la aplicacion
+2. Dibuja algo
+3. Presiona "Guardar"
+4. Cierra la aplicacion
+5. Vuelve a abrirla
+
+Deberia cargar el dibujo guardado.
+
+PASO 5: VERIFICAR LOGS DE SINCRONIZACION
+------------------------------------------
+En la barra de estado inferior deberias ver:
+- "Guardando en servidor..." cuando guardas
+- Mensajes de error si hay problemas de conexion
+
+Si hay errores, verifica:
+- Que la URL sea correcta
+- Que el puerto 5000 este abierto en el firewall del VPS
+- Que el servidor Python este corriendo
+
+PASO 6: CONFIGURACION AVANZADA (OPCIONAL)
+------------------------------------------
+Cambiar intervalo de sincronizacion automatica:
+
+En mainwindow.cpp, busca:
+    m_sync->startAutoSync(2000);  // 2000 ms = 2 segundos
+
+Cambia a 1000 para 1 segundo, o 5000 para 5 segundos.
+
+Deshabilitar sincronizacion automatica:
+Comenta la linea:
+    // m_sync->startAutoSync(2000);
+
+Solo sincronizara cuando presiones "Guardar".
+
+PASO 7: DEPURACION DE CONEXIONES
+---------------------------------
+Si hay problemas de red:
+
+1. Prueba desde terminal:
+   curl -X POST -H "Content-Type: application/json" -d '{"strokes":[]}' http://tu_vps_ip:5000/save
+
+2. Verifica que el archivo canvas_data.json se crea en el servidor:
+   ssh usuario@tu_vps_ip
+   cd paint_server
+   ls -la canvas_data.json
+
+3. Revisa logs del servidor (si usas screen):
+   screen -r paint_server
+   Ctrl+C para detener, luego python3 server.py para ver errores
+
+NOTAS IMPORTANTES:
+- La aplicacion usa QNetworkAccessManager para HTTP requests
+- Los datos se envian en formato JSON
+- La sincronizacion es unidireccional: cliente -> servidor -> otros clientes
+- No hay resolucion de conflictos avanzada (solo merge por ID unico)
+- Para produccion, considera HTTPS y autenticacion

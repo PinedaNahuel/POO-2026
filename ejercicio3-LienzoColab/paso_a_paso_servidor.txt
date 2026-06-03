@@ -1,0 +1,188 @@
+PASO A PASO DETALLADO: CREAR Y EJECUTAR EL SERVIDOR
+===================================================
+
+Ya hiciste:
+- mkdir paint_server
+- cd paint_server
+- El venv (paint_env) esta activado
+
+SIGUIENTE: Crear el archivo server.py
+-------------------------------------
+
+OPCION 1: Usando nano (editor de texto)
+---------------------------------------
+1. Ejecuta este comando:
+   nano server.py
+
+2. Se abrira un editor vacio. Copia y pega TODO esto:
+
+---COPIA DESDE AQUI---
+from flask import Flask, request, jsonify
+import json
+import os
+
+app = Flask(__name__)
+
+# Archivo donde se guarda el estado del dibujo
+DATA_FILE = 'canvas_data.json'
+
+# Endpoint para cargar el dibujo actual
+@app.route('/load', methods=['GET'])
+def load_canvas():
+    if os.path.exists(DATA_FILE):
+        with open(DATA_FILE, 'r') as f:
+            data = json.load(f)
+        return jsonify(data)
+    else:
+        return jsonify({"strokes": []})
+
+# Endpoint para guardar el dibujo
+@app.route('/save', methods=['POST'])
+def save_canvas():
+    data = request.get_json()
+    with open(DATA_FILE, 'w') as f:
+        json.dump(data, f)
+    return jsonify({"status": "saved"})
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=False)
+---HASTA AQUI---
+
+3. Presiona Ctrl+O (para guardar)
+4. Presiona Enter (confirma el nombre server.py)
+5. Presiona Ctrl+X (sale del editor)
+
+OPCION 2: Usando cat (mas rapido)
+---------------------------------
+cat > server.py << 'EOF'
+from flask import Flask, request, jsonify
+import json
+import os
+
+app = Flask(__name__)
+
+DATA_FILE = 'canvas_data.json'
+
+@app.route('/load', methods=['GET'])
+def load_canvas():
+    if os.path.exists(DATA_FILE):
+        with open(DATA_FILE, 'r') as f:
+            data = json.load(f)
+        return jsonify(data)
+    else:
+        return jsonify({"strokes": []})
+
+@app.route('/save', methods=['POST'])
+def save_canvas():
+    data = request.get_json()
+    with open(DATA_FILE, 'w') as f:
+        json.dump(data, f)
+    return jsonify({"status": "saved"})
+
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=5000, debug=False)
+EOF
+
+VERIFICAR QUE SE CREO CORRECTAMENTE
+-----------------------------------
+Ejecuta:
+ls -la server.py
+
+Deberia mostrar algo como:
+-rw-r--r-- 1 root root 650 Apr  6 12:34 server.py
+
+PROBAR QUE FUNCIONA
+------------------
+Ahora ejecuta el servidor:
+python3 server.py
+
+Deberia ver:
+* Running on http://0.0.0.0:5000
+* Debug mode: off
+
+SI VES ESTO, ¡EXCELENTE! El servidor esta corriendo.
+
+PROBAR DESDE OTRA TERMINAL
+--------------------------
+Abre otra terminal SSH en tu VPS (sin cerrar la primera):
+
+ssh usuario@tu_vps_ip
+
+Ejecuta:
+curl http://localhost:5000/load
+
+Deberia devolver:
+{"strokes":[]}
+
+SI FUNCIONA: El servidor esta operacional.
+
+DETENER EL SERVIDOR
+-------------------
+En la terminal donde esta corriendo el servidor, presiona:
+Ctrl+C
+
+EJECUTAR EN BACKGROUND (para que no ocupe la terminal)
+------------------------------------------------------
+Ejecuta asi:
+nohup python3 server.py > server.log 2>&1 &
+
+Deberia devolver algo tipo:
+[1] 12345
+
+VERIFICAR QUE ESTA CORRIENDO
+----------------------------
+ps aux | grep python3
+
+Deberia mostrar el proceso del servidor.
+
+VER LOGS
+-------
+tail -f server.log
+
+Para salir presiona Ctrl+C
+
+PASO SIGUIENTE: ABRIR PUERTO EN FIREWALL
+-----------------------------------------
+sudo ufw allow 5000/tcp
+sudo ufw enable
+
+PROBAR DESDE TU MAQUINA LOCAL
+------------------------------
+Desde tu computadora (no el VPS):
+
+curl http://tu_vps_ip:5000/load
+
+Reemplaza tu_vps_ip con la IP real (ej: 192.168.1.100)
+
+Si devuelve {"strokes":[]}, ¡PERFECTO!
+
+RESUMEN DE COMANDOS PRINCIPALES
+-------------------------------
+# Crear archivo server.py
+nano server.py (copiar y pegar el codigo)
+
+# Ejecutar servidor (primera vez para probar)
+python3 server.py
+
+# Ejecutar en background (para dejar corriendo)
+nohup python3 server.py > server.log 2>&1 &
+
+# Ver si esta corriendo
+ps aux | grep python3
+
+# Ver logs
+tail -f server.log
+
+# Detener servidor (si esta en background)
+pkill -f "python3 server.py"
+
+# Probar conexion
+curl http://localhost:5000/load
+
+PROXIMOS PASOS
+--------------
+1. Verifica que el servidor esta corriendo en background
+2. Abre el puerto en firewall
+3. Prueba desde tu maquina local con curl
+4. Luego actualiza la URL en el cliente Qt
+5. Compila y ejecuta el cliente Qt

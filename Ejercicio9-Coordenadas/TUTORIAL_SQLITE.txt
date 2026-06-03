@@ -1,0 +1,175 @@
+========================================================
+  TUTORIAL: SQLite para el Ejercicio 09 - Qt C++
+========================================================
+
+La buena noticia: Qt ya incluye el driver QSQLITE.
+No hace falta instalar ningun servidor de base de datos.
+Solo necesitas dos cosas opcionales:
+  1. sqlite3.exe  -> para crear/editar la base por consola
+  2. SQLiteStudio -> para administrarla visualmente
+
+La base de datos (dibujo.db) se crea AUTOMATICAMENTE
+al ejecutar el programa por primera vez.
+
+--------------------------------------------------------
+  PARTE 1 - Verificar que Qt tiene el driver SQLite
+--------------------------------------------------------
+
+Antes de correr el proyecto, agrega esto temporalmente
+en main.cpp para verificar (luego lo podes borrar):
+
+    qDebug() << QSqlDatabase::drivers();
+
+Si en la salida aparece "QSQLITE", estas listo.
+Si no aparece, lee la seccion "Solucion de problemas"
+al final de este archivo.
+
+--------------------------------------------------------
+  PARTE 2 - Instalar SQLiteStudio (recomendado)
+--------------------------------------------------------
+
+SQLiteStudio es un administrador visual gratuito y portable
+que te permite ver y editar el archivo .db sin codigo.
+
+Pasos:
+  1. Ir a: https://sqlitestudio.pl
+  2. Descargar "Portable" para Windows (no requiere instalar)
+  3. Descomprimir en cualquier carpeta, por ejemplo:
+       C:\Qt\SQLiteStudio\
+  4. Ejecutar SQLiteStudio.exe
+
+Para abrir la base del ejercicio:
+  - Menu: Database -> Add a database
+  - Tipo: SQLite 3
+  - Archivo: navegar hasta la carpeta del .exe del proyecto,
+    por ejemplo:
+      C:\Users\TuNombre\Documents\ejercicio 9 - coordenadas en base de datos\
+      build\Desktop_Qt_6_11_0_MinGW_64_bit-Debug\debug\dibujo.db
+  - Click en OK -> Connect
+
+Tablas que vas a ver:
+  usuarios  -> los usuarios del login
+  logs      -> registro de accesos y fallos
+  trazos    -> cada trazo de dibujo
+  puntos    -> coordenadas de cada trazo
+
+--------------------------------------------------------
+  PARTE 3 - Instalar sqlite3.exe (opcional, por consola)
+--------------------------------------------------------
+
+Util si queres agregar usuarios extra o consultar datos
+sin abrir SQLiteStudio.
+
+Pasos:
+  1. Ir a: https://www.sqlite.org/download.html
+  2. Descargar en "Precompiled Binaries for Windows":
+       sqlite-tools-win-x64-XXXXXXX.zip
+  3. Descomprimir, tenes sqlite3.exe
+  4. Copiarlo a: C:\Qt\db\  (o donde prefieras)
+  5. Agregar esa carpeta al PATH de Windows (opcional)
+
+Para usarlo: abrir PowerShell o CMD y escribir:
+
+    cd C:\Qt\db
+    sqlite3 dibujo.db
+
+Una vez dentro del prompt de sqlite3:
+
+-- Ver todas las tablas:
+    .tables
+
+-- Ver usuarios cargados:
+    SELECT * FROM usuarios;
+
+-- Agregar un usuario nuevo:
+    INSERT INTO usuarios (usuario, clave, nombre, apellido, mail)
+    VALUES ('cgomez', '1234', 'Carlos', 'Gomez', 'cgomez@gmail.com');
+
+-- Ver los logs de acceso:
+    SELECT * FROM logs;
+
+-- Ver los trazos guardados:
+    SELECT COUNT(*) FROM puntos;
+
+-- Borrar todos los trazos (limpiar dibujo):
+    DELETE FROM puntos;
+    DELETE FROM trazos;
+
+-- Salir de sqlite3:
+    .exit
+
+--------------------------------------------------------
+  PARTE 4 - Usuario por defecto del ejercicio
+--------------------------------------------------------
+
+Al ejecutar el proyecto por primera vez, se crea
+automaticamente este usuario en la base:
+
+    Usuario:  admin
+    Clave:    1234
+    Nombre:   Administrador
+    Apellido: Sistema
+
+Para agregar mas usuarios desde SQLiteStudio:
+  - Abrir la tabla "usuarios"
+  - Click en el icono de agregar fila (o F9)
+  - Completar los campos y guardar (Ctrl+Enter)
+
+Para agregar mas usuarios desde sqlite3 (consola):
+
+    INSERT INTO usuarios (usuario, clave, nombre, apellido, mail)
+    VALUES ('juan', 'pass123', 'Juan', 'Perez', 'juan@mail.com');
+
+--------------------------------------------------------
+  PARTE 5 - Donde queda el archivo dibujo.db
+--------------------------------------------------------
+
+El archivo se crea en la misma carpeta que el ejecutable.
+Con la configuracion Debug de Qt Creator, la ruta tipica es:
+
+    ...\build\Desktop_Qt_6_11_0_MinGW_64_bit-Debug\debug\dibujo.db
+
+Si queres cambiarlo, edita esta linea en main.cpp:
+
+    QString dbPath = QCoreApplication::applicationDirPath() + "/dibujo.db";
+
+Ejemplo para una ruta fija:
+
+    QString dbPath = "C:/Qt/db/dibujo.db";
+
+(Asegurate de que la carpeta exista antes de ejecutar)
+
+--------------------------------------------------------
+  SOLUCION DE PROBLEMAS
+--------------------------------------------------------
+
+Problema: qDebug() no muestra "QSQLITE" en la lista
+--------------------------------------------------
+Causa: Qt no encuentra el plugin del driver.
+
+Solucion en Qt Creator:
+  1. Ir a: Projects -> Build Settings -> Build Steps
+  2. Verificar que el kit sea MinGW 64-bit (no MSVC)
+  3. Si usas MSVC, puede requerir compilar el plugin
+     manualmente. Se recomienda usar MinGW para este ejercicio.
+
+Solucion manual: verificar que existe el archivo:
+  C:\Qt\6.x.x\mingw_64\plugins\sqldrivers\qsqlite.dll
+
+Si no existe, reinstalar Qt con el componente:
+  "Additional Libraries -> Qt SQL Drivers"
+
+Problema: la base no se crea / error al conectar
+--------------------------------------------------
+  - Verificar que la carpeta del .exe tiene permisos de escritura.
+  - Ejecutar Qt Creator como administrador una vez para crear el archivo.
+  - Revisar la salida de qDebug() en "Application Output".
+
+Problema: el dibujo no se guarda entre sesiones
+--------------------------------------------------
+  - Verificar que el archivo dibujo.db no esta en modo
+    solo lectura (click derecho -> Propiedades).
+  - Agregar temporalmente en admindb.cpp al final de guardarTrazo():
+      qDebug() << "Trazo guardado con id:" << trazoid;
+
+========================================================

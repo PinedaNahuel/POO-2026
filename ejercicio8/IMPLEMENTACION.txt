@@ -1,0 +1,555 @@
+================================================================================
+IMPLEMENTACIÓN - Ejercicio 08: Editor Multilenguaje
+Curso POO 2026 - Clase 13
+================================================================================
+
+OBJETIVO GENERAL
+================
+
+Implementar una aplicación Qt Widgets que demuestre:
+  1. Uso obligatorio de herencia y polimorfismo (2 jerarquías)
+  2. Redefinición de eventos en clases derivadas
+  3. Validación de sintaxis por línea con feedback visual
+  4. Signals/Slots para comunicación desacoplada
+  5. Persistencia local (configuración + log)
+  6. Arquitectura escalable y mantenible
+
+ARQUITECTURA GENERAL
+====================
+
+┌─────────────────────────────────────────────┐
+│           main.cpp (Punto Entrada)          │
+│   - Crea AppConfig, EventLogger, AppController
+│   - Inicia flujo de aplicación              │
+└──────────────────┬──────────────────────────┘
+                   │
+        ┌──────────▼──────────┐
+        │  AppController      │
+        │  (Orquestador)      │
+        └──────────┬──────────┘
+                   │
+     ┌─────────────┼─────────────┐
+     │             │             │
+  ┌──▼────┐   ┌───▼────┐   ┌──▼─────┐
+  │ Login │ ▶ │Bloqueado│ ▶ │ Editor  │
+  │Screen │   │ Mode    │   │Principal│
+  └────────┘   └────────┘   └─────────┘
+     (Pantalla derivada 1)
+     (Pantalla derivada 2)
+     (Pantalla derivada 3)
+        ▲
+        │
+    ┌───┴─────────────────────────┐
+    │ Clase base: Pantalla (abstracta)
+    │ - inicializarUI() = 0
+    │ - conectarEventos() = 0
+    │ - cargarDatos() = 0
+    │ - validarEstado() = 0
+    │ - registrarEvento() = 0
+    │ - keyPressEvent()
+    │ - mousePressEvent()
+    │ - resizeEvent()
+    │ - closeEvent()
+    │ - focusInEvent()
+    │ - focusOutEvent()
+    └─────────────────────────────┘
+
+COMPONENTES PRINCIPALES
+=======================
+
+1) CLASE BASE ABSTRACTA: Pantalla (pantalla.h/cpp)
+   ────────────────────────────────────────────────
+   Propósito: Definir interfaz común para todas las pantallas.
+   
+   Funciones virtuales puras (deben ser sobrescritas):
+   - virtual void inicializarUI() = 0;
+   - virtual void conectarEventos() = 0;
+   - virtual void cargarDatos() = 0;
+   - virtual bool validarEstado() = 0;
+   - virtual void registrarEvento(const QString &descripcion) = 0;
+   
+   Funciones virtuales con implementación:
+   - virtual void keyPressEvent(QKeyEvent *event);
+   - virtual void mousePressEvent(QMouseEvent *event);
+   - virtual void resizeEvent(QResizeEvent *event);
+   - virtual void closeEvent(QCloseEvent *event);
+   - virtual void focusInEvent(QFocusEvent *event);
+   - virtual void focusOutEvent(QFocusEvent *event);
+   
+   Motivo: Garantizar que cada pantalla implementa el mismo contrato,
+           forzando arquitectura coherente.
+
+2) PANTALLA DERIVADA 1: LoginScreen (loginscreen.h/cpp)
+   ──────────────────────────────────────────────────────
+   Responsabilidad: Autenticación de usuario con sistema de bloqueo.
+   
+   Miembros:
+   - QLineEdit *m_usuario, *m_clave
+   - QPushButton *m_btnEntrar
+   - QLabel *m_estado
+   - int m_intentosFallidos (contador 0-3)
+   - AppConfig &m_config (referencia a configuración)
+   - EventLogger &m_logger (referencia a logger)
+   
+   Señales emitidas:
+   - void loginExitoso()        (cuando credenciales son válidas)
+   - void bloqueoSolicitado()   (cuando m_intentosFallidos >= 3)
+   
+   Eventos redefinidos:
+   - keyPressEvent: Enter intenta login
+   - mousePressEvent: registra click
+   - resizeEvent: registra tamaño
+   - closeEvent: pide confirmación de salida
+   - focusInEvent/focusOutEvent: registra focus
+   
+   Métodos importantes:
+   - void intentarLogin(): verifica credenciales contra config
+   - void resetIntentos(): limpia contador para reintento
+   
+   Motivo: Primera capa de seguridad, demostra captura de eventos básicos.
+
+3) PANTALLA DERIVADA 2: ModoBloqueado (modobloqueado.h/cpp)
+   ────────────────────────────────────────────────────────
+   Responsabilidad: Mostrar cuenta regresiva tras 3 intentos fallidos.
+   
+   Miembros:
+   - QLabel *m_cuentaRegresiva
+   - QTimer *m_timer (actualiza cada segundo)
+   - int m_segundosRestantes (12-15 por defecto)
+   - AppConfig &m_config
+   - EventLogger &m_logger
+   
+   Señales emitidas:
+   - void bloqueoFinalizado()   (cuando cuenta llega a 0)
+   
+   Eventos redefinidos: Todos (similar a LoginScreen)
+   
+   Métodos importantes:
+   - void iniciarBloqueo(): arranca temporizador
+   - void actualizarCuentaRegresiva(): decrementa, emite señal si finaliza
+   
+   Motivo: Introduce QTimer y cuenta regresiva, demuestra más complejidad.
+
+4) PANTALLA DERIVADA 3: EditorPrincipal (editorprincipal.h/cpp)
+   ──────────────────────────────────────────────────────────
+   Responsabilidad: Editor de código con validación multilenguaje.
+   
+   Miembros:
+   - CodeEditor *m_editor (editor personalizado)
+   - QComboBox *m_selectorLenguaje (C++, Python, Java)
+   - QPushButton *m_btnExportar, *m_btnLimpiar
+   - QLabel *m_estado, *m_diagnostico
+   - std::unique_ptr<ValidadorCpp> m_validadorCpp
+   - std::unique_ptr<ValidadorPython> m_validadorPython
+   - std::unique_ptr<ValidadorJava> m_validadorJava
+   - QSet<int> m_lineasInvalidas (para resaltado)
+   - QMap<int, QString> m_mensajesError
+   - AppConfig &m_config
+   - EventLogger &m_logger
+   
+   Señales emitidas: NINGUNA (es último en flujo)
+   
+   Eventos redefinidos:
+   - keyPressEvent: Ctrl+S = exportar, ESC = cerrar
+   - mousePressEvent: registra click
+   - resizeEvent: registra tamaño
+   - closeEvent: pide confirmación de salida
+   - focusInEvent/focusOutEvent: registra focus
+   
+   Métodos importantes:
+   - void cargarTemplateDelLenguaje(): rellena editor con template inicial
+   - void validarYMarcarLinea(int lineaBase0): valida línea con validador activo
+   - void refrescarResaltado(): marca líneas inválidas en rojo
+   - void exportarAJpg(): renderiza texto a JPG
+   - ValidadorSintaxis* validadorActual() const: retorna validador según lenguaje
+   
+   Slots conectados:
+   - onLenguajeCambiado(): limpia validación, carga template, registra evento
+   - onLineaAbandonada(int): valida línea
+   - onEditorPerdioFoco(int): valida línea actual
+   - onEditorRecibioFoco(): registra evento
+   - exportarAJpg(): crea JPG
+   - limpiarCodigo(): borra contenido
+   
+   Motivo: Pantalla más compleja, demuestra UI rica, validación, exportación.
+
+5) JERARQUÍA 2: VALIDADORES POLIMÓRFICOS
+   ────────────────────────────────────────
+
+   Clase base abstracta: ValidadorSintaxis (validadores.h/cpp)
+   ────────────────────────────────────────────────────────
+   Responsabilidad: Interfaz para validadores de lenguaje.
+   
+   Funciones virtuales puras:
+   - virtual QString nombreLenguaje() const = 0;
+   - virtual bool validarLinea(const QString &linea, QString &diagnostico) const = 0;
+   
+   Funciones helper:
+   - bool balanceDelimitadores(const QString &linea) const;
+     Valida que paréntesis/corchetes no se cierren sin apertura.
+     Permite aperturas incompletas (normal en una sola línea).
+   
+   Derivada 1: ValidadorCpp
+   ────────────────────────
+   Reglas:
+   ✓ Permite comentarios // y líneas vacías
+   ✓ Valida balance de delimitadores ()[]
+   ✓ Valida palabras clave de C++ (if, for, class, etc.)
+   ✓ Exige terminación con ; o {}
+   ✗ Rechaza cualquier palabra de Python (print, def, class:, etc.)
+   ✗ Rechaza cualquier palabra de Java (System, public, class, etc.)
+   
+   Derivada 2: ValidadorPython
+   ────────────────────────────
+   Reglas:
+   ✓ Permite comentarios # y líneas vacías
+   ✓ Valida indentación en múltiplos de 4
+   ✓ Valida balance de delimitadores ()[]
+   ✓ Valida palabras clave Python (if:, for:, def, etc.)
+   ✓ Exige : al final de bloques
+   ✗ Rechaza {} o ; (C++/Java)
+   ✗ Rechaza palabras de C++ (cout, void, std::, etc.)
+   ✗ Rechaza palabras de Java (System, public, etc.)
+   
+   Derivada 3: ValidadorJava
+   ──────────────────────────
+   Reglas:
+   ✓ Permite comentarios // y líneas vacías
+   ✓ Valida balance de delimitadores ()[]
+   ✓ Valida palabras clave Java (public, if, for, etc.)
+   ✓ Exige terminación con ; o {}
+   ✗ Rechaza : al final (Python)
+   ✗ Rechaza palabras de Python (print, def, import, etc.)
+   ✗ Rechaza palabras de C++ (cout, void, std::, etc.)
+   
+   Motivo: Segunda jerarquía polimórfica, demuestra encapsulación
+           de reglas por lenguaje, fácil de extender.
+
+6) EDITOR PERSONALIZADO: CodeEditor (codeeditor.h/cpp)
+   ────────────────────────────────────────────────────
+   Responsabilidad: QPlainTextEdit con eventos personalizados.
+   
+   Hereda de: QPlainTextEdit
+   
+   Señales emitidas:
+   - void lineaAbandonada(int lineaBase0)  (cambio de línea)
+   - void editorRecibioFoco()              (ganó focus)
+   - void editorPerdioFoco(int lineaActual) (perdió focus)
+   
+   Métodos:
+   - void setErrores(const QSet<int> &lineas, const QMap<int, QString> &mensajes)
+     Marca líneas inválidas con resaltado rojo
+   - QString textoLinea(int lineaBase0) const
+     Obtiene texto de una línea específica
+   
+   Eventos redefinidos:
+   - focusInEvent/focusOutEvent: emiten signals
+   - keyPressEvent: detecta cambios de línea
+   
+   Motivo: Desacopla lógica de editor de la pantalla principal,
+           permite reutilización, simplifica validación.
+
+7) ORQUESTADOR: AppController (appcontroller.h/cpp)
+   ────────────────────────────────────────────────
+   Responsabilidad: Manejar flujo de pantallas usando polimorfismo.
+   
+   Miembros:
+   - Pantalla *m_actual (puntero a clase base)
+   - LoginScreen *m_login
+   - ModoBloqueado *m_bloqueado
+   - EditorPrincipal *m_editor
+   - QMainWindow *m_ventanaPrincipal
+   - AppConfig &m_config
+   - EventLogger &m_logger
+   
+   Slots:
+   - void cambiarPantalla(Pantalla *nueva, bool fullScreen)
+     Oculta pantalla actual, muestra nueva
+   - void onLoginExitoso()
+     Transición: LoginScreen → EditorPrincipal (fullscreen)
+   - void onBloqueoSolicitado()
+     Transición: LoginScreen → ModoBloqueado
+   - void onBloqueoFinalizado()
+     Transición: ModoBloqueado → LoginScreen
+   
+   Motivo: Uso real de polimorfismo. m_actual es puntero a clase base,
+           pero apunta a diferentes derivadas en runtime.
+
+8) CONFIGURACIÓN: AppConfig (appconfig.h/cpp)
+   ──────────────────────────────────────────
+   Responsabilidad: Cargar/crear archivo config.ini.
+   
+   Estructura AppConfig (struct):
+   - QString usuarioInicial
+   - QString claveInicial
+   - int tiempoBloqueoSegundos
+   - QString lenguajePorDefecto
+   - QString rutaExportacion
+   - QString rutaLog
+   
+   Método estático principal:
+   - static AppConfig AppConfig::cargar()
+     1. Busca config.ini en directorio de ejecución
+     2. Si no existe, crea uno con valores por defecto
+     3. Crea directorios logs/ y salidas/ si no existen
+     4. Retorna struct con valores cargados
+   
+   Motivo: Parametrización sin editar código fuente,
+           auto-inicialización de directorios.
+
+9) LOGGER: EventLogger (eventlogger.h/cpp)
+   ──────────────────────────────────────
+   Responsabilidad: Guardar eventos con timestamp.
+   
+   Constructor:
+   - EventLogger(const QString &rutaRelativa)
+     Absolutiza ruta respecto a app directory
+   
+   Método principal:
+   - void log(const QString &mensaje)
+     Abre archivo en modo Append, escribe: [YYYY-MM-DD HH:MM:SS] | mensaje
+   
+   Motivo: Trazabilidad de acciones, útil para debugging.
+
+FLUJO DE EJECUCIÓN
+==================
+
+1. main.cpp inicia
+   │
+   ├─ Crea AppConfig::cargar()
+   │  ├─ Lee/crea config.ini
+   │  └─ Auto-crea logs/ y salidas/
+   │
+   ├─ Crea EventLogger(config.rutaLog)
+   │
+   ├─ Crea AppController(config, logger)
+   │  ├─ Crea LoginScreen
+   │  ├─ Crea ModoBloqueado
+   │  └─ Crea EditorPrincipal
+   │
+   └─ controller.iniciar() muestra LoginScreen
+
+2. Usuario ingresa credenciales en LoginScreen
+   │
+   ├─ Si correcto: emite loginExitoso()
+   │  └─ AppController::onLoginExitoso()
+   │     ├─ Muestra EditorPrincipal en fullscreen
+   │     └─ Registra evento en log
+   │
+   └─ Si incorrecto (3+ intentos): emite bloqueoSolicitado()
+      └─ AppController::onBloqueoSolicitado()
+         ├─ Muestra ModoBloqueado con cuenta regresiva
+         └─ Inicia QTimer para actualización
+
+3. ModoBloqueado espera 15 segundos
+   │
+   ├─ QTimer::timeout() llama actualizarCuentaRegresiva()
+   │  ├─ Decrementa segundosRestantes
+   │  └─ Actualiza UI (QLabel)
+   │
+   └─ Cuando llega a 0: emite bloqueoFinalizado()
+      └─ AppController::onBloqueoFinalizado()
+         ├─ LoginScreen.resetIntentos()
+         ├─ Muestra LoginScreen
+         └─ Usuario puede reintentar
+
+4. Usuario en EditorPrincipal
+   │
+   ├─ Selecciona lenguaje en combo
+   │  ├─ onLenguajeCambiado() llama cargarTemplateDelLenguaje()
+   │  └─ Editor se rellena con template (main inicial)
+   │
+   ├─ Escribe código
+   │
+   ├─ Al abandonar línea (Enter/Tab/click otra línea/pierdo focus)
+   │  ├─ CodeEditor emite lineaAbandonada(lineNum)
+   │  ├─ EditorPrincipal::onLineaAbandonada() llama validarYMarcarLinea()
+   │  ├─ Se obtiene validador actual según lenguaje
+   │  ├─ Validador verifica sintaxis de esa línea
+   │  ├─ Si inválida: se marca en rojo, se muestra diagnóstico
+   │  ├─ Si válida: se quita marca
+   │  └─ Se registra evento en log
+   │
+   ├─ Usuario presiona Ctrl+S o botón Exportar
+   │  ├─ EditorPrincipal::exportarAJpg()
+   │  ├─ Se valida que editor no esté vacío
+   │  ├─ Se renderiza texto a QImage (fuente monospace)
+   │  ├─ Se guarda como JPEG en salidas/codigo.jpg
+   │  ├─ Se muestra diálogo con ruta final
+   │  └─ Se registra evento en log
+   │
+   └─ Usuario presiona ESC
+      ├─ keyPressEvent detecta Key_Escape
+      ├─ close() dispara closeEvent()
+      ├─ Se pide confirmación
+      └─ Si confirma: vuelve a LoginScreen
+
+PUNTOS CLAVE DE POLIMORFISMO
+=============================
+
+1. Pantalla (base abstracta) vs derivadas
+   ──────────────────────────────────────
+   En AppController, mantenemos:
+   ```cpp
+   Pantalla *m_actual;  // Puntero a clase base
+   ```
+   
+   En runtime:
+   - m_actual apunta a LoginScreen (derivada)
+   - m_actual apunta a ModoBloqueado (derivada)
+   - m_actual apunta a EditorPrincipal (derivada)
+   
+   Cada derivada redefinisce eventos distinto:
+   - LoginScreen::keyPressEvent() → Enter intenta login
+   - ModoBloqueado::keyPressEvent() → (no hace nada especial)
+   - EditorPrincipal::keyPressEvent() → ESC cierra, Ctrl+S exporta
+   
+   AppController NO sabe qué derivada es, solo llama:
+   ```cpp
+   m_actual->cambiarPantalla(...);  // Polimorfismo en tiempo de ejecución
+   ```
+
+2. Validadores (base abstracta) vs derivadas
+   ────────────────────────────────────────
+   En EditorPrincipal:
+   ```cpp
+   ValidadorSintaxis *validador = validadorActual();
+   validador->validarLinea(linea, diagnostico);  // Polimorfismo
+   ```
+   
+   ValidadorActual() retorna:
+   - m_validadorCpp.get() si lenguaje == "C++"
+   - m_validadorPython.get() si lenguaje == "Python"
+   - m_validadorJava.get() si lenguaje == "Java"
+   
+   Cada derivada implementa reglas distintas pero interfaz idéntica.
+
+SIGNALS/SLOTS USADOS
+====================
+
+LoginScreen → AppController:
+- connect(m_btnEntrar, &QPushButton::clicked, this, &LoginScreen::intentarLogin);
+- connect(this, &LoginScreen::loginExitoso, controller, &AppController::onLoginExitoso);
+- connect(this, &LoginScreen::bloqueoSolicitado, controller, &AppController::onBloqueoSolicitado);
+
+ModoBloqueado → AppController:
+- connect(m_timer, &QTimer::timeout, this, &ModoBloqueado::actualizarCuentaRegresiva);
+- connect(this, &ModoBloqueado::bloqueoFinalizado, controller, &AppController::onBloqueoFinalizado);
+
+EditorPrincipal → Internos:
+- connect(m_selectorLenguaje, ..., this, &EditorPrincipal::onLenguajeCambiado);
+- connect(m_editor, &CodeEditor::lineaAbandonada, this, &EditorPrincipal::onLineaAbandonada);
+- connect(m_editor, &CodeEditor::editorPerdioFoco, this, &EditorPrincipal::onEditorPerdioFoco);
+- connect(m_btnExportar, &QPushButton::clicked, this, &EditorPrincipal::exportarAJpg);
+
+DESACOPLAMIENTO Y ESCALABILIDAD
+================================
+
+1. Agregar nueva pantalla es fácil:
+   - Crear clase derivada de Pantalla
+   - Implementar las 5 funciones virtuales puras
+   - Redefenir eventos según necesidad
+   - Conectar señales en AppController
+   - Agregar transición en algún slot
+
+2. Agregar validador nuevo:
+   - Crear clase derivada de ValidadorSintaxis
+   - Implementar validarLinea() con reglas específicas
+   - En EditorPrincipal, crear unique_ptr del nuevo validador
+   - Agregar opción en combo selector (opcional)
+   - En validadorActual(), retornar el nuevo validador
+
+3. Cambiar reglas de validación:
+   - Editar solo validadores.cpp (no afecta resto de código)
+   - Cambiar tiempo de bloqueo en config.ini
+   - Cambiar credenciales en config.ini
+   - Cambiar rutas de log/exportación en config.ini
+
+TESTING MANUAL
+==============
+
+1. Compilación
+   - Ctrl+B en Qt Creator
+   - Verificar cero errores
+
+2. Ejecución inicial
+   - Ctrl+R → Aparece LoginScreen
+   - Verificar que config.ini se creó
+   - Verificar que logs/ y salidas/ existen
+
+3. Login incorrecto
+   - Ingresar usuario "incorrecto" / "incorrecto"
+   - Presionar Enter 3 veces
+   - Verificar que aparece ModoBloqueado con cuenta regresiva
+   - Esperar a que finalice → vuelve LoginScreen
+   - Revisar logs/eventos.log para ver eventos registrados
+
+4. Login correcto
+   - Ingresar admin / 1234
+   - Presionar Enter
+   - Verificar que aparece EditorPrincipal en fullscreen
+   - Verificar que selector de lenguaje está en C++
+   - Verificar que template de C++ aparece en editor
+
+5. Cambio de lenguaje
+   - Cambiar a "Python" en combo
+   - Verificar que editor se borra y carga template de Python
+   - Cambiar a "Java"
+   - Verificar que carga template de Java
+
+6. Validación de sintaxis
+   - En C++: escribir "print("hello")" → debe marcar en rojo con mensaje
+   - En Python: escribir "cout << x;" → debe marcar en rojo con mensaje
+   - En Java: escribir "def func():" → debe marcar en rojo con mensaje
+   - Escribir código válido → no debe haber marca roja
+
+7. Exportación
+   - Escribir algo en editor
+   - Presionar Ctrl+S
+   - Verificar que aparece diálogo con ruta de guardado
+   - Verificar que salidas/codigo.jpg fue creado
+   - Abrir imagen → debe mostrar código escrito
+
+8. Cierre
+   - En EditorPrincipal, presionar ESC
+   - Verificar que aparece diálogo de confirmación
+   - Si acepta: vuelve LoginScreen
+   - Revisar eventos.log para ver "Tecla ESC en editor de codigo"
+
+LIMITACIONES Y FUTUROS MEJORAS
+===============================
+
+Limitaciones actuales:
+- Validación por línea no analiza contexto multi-línea
+- Exportación JPG no tiene coloreado sintáctico
+- Credenciales y timeouts en config.ini (producción: usar BD)
+- No hay sincronización en la nube (offline by design)
+
+Posibles mejoras:
+- Agregar verificación multi-línea (ej: detectar bloques incompletos)
+- Coloreado sintáctico en editor
+- Temas oscuro/claro configurable
+- Exportación a PDF/código fuente, no solo JPG
+- Historial de códigos guardados localmente
+- Búsqueda y reemplazo en editor
+- Deshacer/Rehacer (undo/redo)
+- Autocompletado básico
+- Más lenguajes (Ruby, Go, Rust, etc.)
+
+CONCLUSIÓN
+==========
+Esta implementación cumple 100% la consigna de clase demostrando:
+
+✓ Herencia y polimorfismo en 2 jerarquías distintas
+✓ Redefinición consciente de eventos en derivadas
+✓ Uso de signals/slots para desacoplamiento
+✓ Validación en tiempo real con feedback visual
+✓ Persistencia local (config + log)
+✓ Arquitectura escalable y mantenible
+✓ UI responsiva y profesional
+✓ Exportación de datos en formato estándar
+
+================================================================================
+Desarrollado: Qt 6.x / qmake / C++17
+Fecha: 27 de Abril 2026
+================================================================================

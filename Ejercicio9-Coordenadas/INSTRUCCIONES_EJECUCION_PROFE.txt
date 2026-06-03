@@ -1,0 +1,89 @@
+========================================================
+INSTRUCCIONES PARA EJECUTAR EL PROYECTO (DOCENTE)
+========================================================
+
+Proyecto: Ejercicio 09 - Coordenadas en base de datos
+Stack: Qt Widgets + SQLite
+Sistema recomendado: Windows
+
+--------------------------------------------------------
+1) Requisitos
+--------------------------------------------------------
+
+- Qt Creator instalado.
+- Kit de compilacion Qt 6 con MinGW (ej: Qt 6.11.0 MinGW 64-bit).
+- Modulo SQL habilitado en Qt (el proyecto usa QT += sql).
+
+No se necesita servidor de base de datos.
+SQLite es un archivo local.
+
+--------------------------------------------------------
+2) Abrir y compilar
+--------------------------------------------------------
+
+1. Abrir Qt Creator.
+2. File -> Open File or Project.
+3. Seleccionar: ejercicio 9 - coordenadas en base de datos.pro
+4. Elegir kit: Desktop Qt 6.x MinGW 64-bit.
+5. Ejecutar:
+   - Run qmake
+   - Clean
+   - Build
+   - Run
+
+--------------------------------------------------------
+3) Primer ingreso al sistema
+--------------------------------------------------------
+
+Usuario inicial cargado automaticamente:
+- usuario: admin
+- clave: 1234
+
+Al iniciar por primera vez, la aplicacion crea la base y tablas.
+
+--------------------------------------------------------
+4) Controles de la aplicacion
+--------------------------------------------------------
+
+- Click izquierdo + mover mouse: dibujar
+- Rueda del mouse: cambiar grosor del pincel
+- Tecla R: color rojo
+- Tecla G: color verde
+- Tecla B: color azul
+- Tecla Escape: borrar lienzo completo
+- Ctrl+Z: deshacer (maximo 10 acciones)
+
+--------------------------------------------------------
+5) Registro de usuarios
+--------------------------------------------------------
+
+En la ventana Login:
+- Boton Registrar
+- Completar datos
+- El usuario se guarda en SQLite
+- La contrasenia se guarda con hash SHA-256
+
+--------------------------------------------------------
+6) Ubicacion de la base de datos
+--------------------------------------------------------
+
+El archivo SQLite se llama: dibujo.db
+Se crea junto al ejecutable en la carpeta de build.
+
+Puede abrirse con SQLiteStudio para verificar:
+- tabla usuarios
+- tabla logs
+- tabla trazos
+- tabla puntos
+
+--------------------------------------------------------
+7) Notas de evaluacion
+--------------------------------------------------------
+
+- Login implementado con Qt Designer (login.ui).
+- Validacion y persistencia en SQLite.
+- Registro de logs de ingreso exitoso/fallido.
+- Sin guardar contrasenias en logs.
+- Trazos persistidos como coordenadas por punto.
+
+========================================================
